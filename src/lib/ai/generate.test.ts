@@ -128,6 +128,95 @@ describe('generateReply — OpenAI', () => {
   })
 })
 
+describe('generateReply — Groq', () => {
+  it('calls the Groq chat completions endpoint and returns the reply', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        choices: [{ message: { content: 'Sure — happy to help!' } }],
+        usage: { prompt_tokens: 20, completion_tokens: 4, total_tokens: 24 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({ provider: 'groq', model: 'openai/gpt-oss-120b', apiKey: 'gsk-test' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toEqual({
+      text: 'Sure — happy to help!',
+      handoff: false,
+      usage: { promptTokens: 20, completionTokens: 4, totalTokens: 24 },
+    })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('api.groq.com')
+    expect(opts.headers.Authorization).toBe('Bearer gsk-test')
+  })
+
+  it('maps a 401 to an invalid_key AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errResponse(401, { error: { message: 'Invalid API Key' } }),
+      ),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'groq' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_key', status: 401 })
+  })
+
+  it('maps a 429 to a rate_limited AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(errResponse(429, { error: { message: 'Rate limit' } })),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'groq' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'rate_limited' })
+  })
+
+  it('throws on an empty completion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okResponse({ choices: [{ message: { content: '' } }] })),
+    )
+    await expect(
+      generateReply({
+        config: config({ provider: 'groq' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toBeInstanceOf(AiError)
+  })
+
+  it('detects handoff in the model output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        okResponse({ choices: [{ message: { content: '[[HANDOFF]]' } }] }),
+      ),
+    )
+    const res = await generateReply({
+      config: config({ provider: 'groq' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'I want to speak to a person' }],
+    })
+    expect(res.handoff).toBe(true)
+    expect(res.text).toBe('')
+  })
+})
+
 describe('generateReply — Anthropic', () => {
   it('calls the messages endpoint with the version header and parses text blocks', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
