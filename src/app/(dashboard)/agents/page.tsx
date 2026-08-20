@@ -16,6 +16,7 @@ export default function AgentsPage() {
   const canViewUsage = accountRole ? canEditSettings(accountRole) : false;
   const [tab, setTab] = useState<Tab>('playground');
   const [decided, setDecided] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
 
   // Land first-time users on Setup, returning users on the Playground.
   useEffect(() => {
@@ -24,9 +25,15 @@ export default function AgentsPage() {
       try {
         const res = await fetch('/api/ai/config');
         const data = await res.json().catch(() => ({}));
-        if (!cancelled) setTab(data?.configured ? 'playground' : 'setup');
+        if (!cancelled) {
+          setConfigured(Boolean(data?.configured));
+          setTab(data?.configured ? 'playground' : 'setup');
+        }
       } catch {
-        if (!cancelled) setTab('setup');
+        if (!cancelled) {
+          setConfigured(false);
+          setTab('setup');
+        }
       } finally {
         if (!cancelled) setDecided(true);
       }
@@ -70,7 +77,10 @@ export default function AgentsPage() {
           </TabsList>
 
           <TabsContent value="playground" className="mt-4">
-            <AiPlayground onGoToSetup={() => setTab('setup')} />
+            <AiPlayground
+              configured={configured}
+              onGoToSetup={() => setTab('setup')}
+            />
           </TabsContent>
 
           <TabsContent value="setup" className="mt-4">

@@ -13,7 +13,14 @@ interface Turn {
   handoff?: boolean;
 }
 
-export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
+export function AiPlayground({
+  configured,
+  onGoToSetup,
+}: {
+  /** Whether the account has a saved AI config — null while still loading. */
+  configured?: boolean | null;
+  onGoToSetup?: () => void;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -111,7 +118,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
               It uses your knowledge base and behaves exactly like the
               auto-reply bot — including handoff.
             </p>
-            {onGoToSetup && (
+            {configured === false && onGoToSetup && (
               <Button
                 variant="link"
                 size="sm"
